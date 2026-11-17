@@ -1,110 +1,76 @@
-
-/* ==================================
-   CHRISTMAS WONDERLAND THEME
-   BMIS 235 - HTML-3
-   ================================== */
-
 body {
-    font-family: Georgia, "Times New Roman", serif;
-    background-color: #fffaf0;
-    color: #333333;
+    background-color: #fff8e7;
+    font-family: Arial, sans-serif;
     margin: 0;
-    padding: 0 20 px 40 px 20 px;
+    padding: 0;
+    color: #333;
 }
 
-/* Navigation Menu */
-nav {
-    background-color: #14532d;
-    padding: 15 px;
+header {
+    background-color: #b22222;
+    color: white;
     text-align: center;
-    border-bottom: 5 px solid #c9a227;
+    padding: 25px;
 }
 
-nav img {
-    height: 50px;
-    margin: 5px 12px;
-    vertical-align: middle;
+h1, h2 {
+    color: #b22222;
+    text-align: center;
+}
+
+nav {
+    background-color: #165b33;
+    text-align: center;
+    padding: 15px;
 }
 
 nav a {
-    text-decoration: none;
+    display: inline-block;
+    margin: 10px;
 }
 
-/* Main Headings */
-h1 {
-    color: #b22222;
-    text-align: center;
-    font-size: 40 px;
-    margin-top: 35 px;
+nav img {
+    width: 100px;
+    height: auto;
+    border: 3px solid white;
+    border-radius: 10px;
 }
 
-h2 {
-    color: #14532d;
-    text-align: center;
-    margin-top: 30 px;
+nav img:hover {
+    border-color: #ffd700;
 }
 
-h3 {
-    color: #b22222;
-    text-align: center;
-    margin-top: 25 px;
+main {
+    max-width: 900px;
+    margin: 25px auto;
+    padding: 20px;
+    background-color: white;
+    border-radius: 10px;
 }
 
-/* Paragraphs */
 p {
-    max-width: 700 px;
-    margin: 20 px auto;
-    font-size: 18 px;
-    line-height: 1.7;
-    text-align: center;
+    line-height: 1.6;
+    font-size: 17px;
 }
 
-/* Lists */
-ul {
-    max-width: 500 px;
-    margin: 20 px auto;
-    line-height: 2;
-    font-size: 18 px;
-}
-
-/* Christmas Showcase Box */
-.showcase {
-    background-color: #e8f5e9;
-    border: 3 px solid #14532d;
-    border-radius: 15 px;
-    padding: 25 px;
-    max-width: 800 px;
-    margin: 35 px auto;
-    box-shadow: 0 4 px 10 px rgba (0,0,0,0.15);
-}
-
-/* Footer */
-footer {
-    background-color: #14532d;
-    color: white;
-    text-align: center;
-    padding: 20 px;
-    margin-top: 40 px;
-    border-top: 4 px solid #c9a227;
-}
-
-/* Images */
 img {
     max-width: 100%;
 }
 
-/* Mobile Friendly */
-  @ media screen and (max-width: 600px) {
-    h1 {
-        font-size: 30 px;
-    }
+footer {
+    background-color: #165b33;
+    color: white;
+    text-align: center;
+    padding: 15px;
+    margin-top: 30px;
+}
 
+@media screen and (max-width: 600px) {
     nav img {
-        height: 35 px;
-        margin: 4 px;
+        width: 70px;
     }
 
-    p {
-        font-size: 16 px;
+    main {
+        margin: 10px;
     }
 }

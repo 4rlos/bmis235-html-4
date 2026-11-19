@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<!--
+  Author: Carlos Murillo
+  BMIS 235 HTML-4, Path 3 (Full build)
+  AI piece: "Sleigh Path Finder" learning tool (made with Claude).
+  Teaches links and file paths: you pick the file a link is written in,
+  type the href or src, and a sleigh walks the path one step at a time
+  through the site's folders. It shows where the path works and where it breaks.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="author" content="Carlos Murillo">
+  <title>Sleigh Path Finder · How links find files</title>
+  <style>
+    .pf, .pf * { box-sizing: border-box; }
+    body.pf {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      color: #2b2b2b;
+      background: #f6f3ee;
+    }
+    .pf-header {
+      background: #b22222;
+      color: #fff;
+      text-align: center;
+      padding: 22px 16px 18px;
+    }
+    .pf-header h1 { margin: 0 0 6px; font-size: 28px; }
+    .pf-header p { margin: 0; font-size: 16px; }
+    .pf-nav {
+      background: #165b33;
+      text-align: center;
+      padding: 10px;
+    }
+    .pf-nav a { color: #fff; font-weight: bold; margin: 0 10px; }
+    .pf-wrap { max-width: 1000px; margin: 0 auto; padding: 18px 14px 40px; }
+    .pf-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 18px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.12);
+    }
+    .pf-card h2 { color: #165b33; margin: 0 0 10px; font-size: 21px; }
+    .pf-rules { margin: 0; padding-left: 20px; line-height: 1.6; }
+    .pf-rules code, .pf-log code, .pf-hint code, .pf-chal code {
+      background: #f0ede6; padding: 1px 5px; border-radius: 4px;
+    }
+    .pf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    @media (max-width: 760px) { .pf-grid { grid-template-columns: 1fr; } }
+
+    /* folder tree */
+    .pf-tree { position: relative; font-family: Consolas, Menlo, monospace; font-size: 16px; }
+    .pf-node {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 8px; margin: 3px 0; border-radius: 8px;
+      border: 2px solid transparent;
+      transition: background .3s, border-color .3s;
+    }
+    .pf-node .pf-ic { width: 22px; text-align: center; }
+    .pf-kids { margin-left: 26px; border-left: 2px dashed #d6d0c4; padding-left: 6px; }
+    .pf-node.is-start { border-color: #c9a227; background: #fff8dc; }
+    .pf-node.is-here { background: #e3f1e8; border-color: #165b33; }
+    .pf-node.is-found { background: #d4f5dc; border-color: #1f8a3a; }
+    .pf-node.is-bad { background: #fde2e2; border-color: #b22222; }
+    .pf-sleigh {
+      position: absolute; left: 0; top: 0;
+      font-size: 22px; pointer-events: none;
+      transition: transform .7s ease-in-out, opacity .3s;
+      opacity: 0;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .pf-sleigh, .pf-node { transition: none; }
+    }
+
+    /* controls */
+    .pf-label { display: block; font-weight: bold; margin: 10px 0 4px; }
+    .pf-select, .pf-input {
+      width: 100%; font-size: 16px; padding: 9px 10px;
+      border: 2px solid #ccc; border-radius: 8px; font-family: Consolas, Menlo, monospace;
+    }
+    .pf-input:focus, .pf-select:focus { outline: none; border-color: #165b33; }
+    .pf-code {
+      margin-top: 10px; background: #1f2b24; color: #e8f5ec;
+      padding: 10px 12px; border-radius: 8px;
+      font-family: Consolas, Menlo, monospace; font-size: 14px; overflow-x: auto;
+      white-space: pre;
+    }
+    .pf-code .pf-hl { color: #ffd76a; font-weight: bold; }
+    .pf-btn {
+      font-size: 16px; font-weight: bold; cursor: pointer;
+      border: none; border-radius: 8px; padding: 10px 16px; margin-top: 12px;
+      background: #b22222; color: #fff;
+    }
+    .pf-btn:hover { background: #8f1b1b; }
+    .pf-btn.pf-alt { background: #165b33; }
+    .pf-btn.pf-alt:hover { background: #0f4225; }
+    .pf-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .pf-chip {
+      font-size: 13px; cursor: pointer; border-radius: 999px;
+      border: 1px solid #165b33; background: #fff; color: #165b33; padding: 5px 10px;
+      font-family: Consolas, Menlo, monospace;
+    }
+    .pf-chip:hover { background: #e3f1e8; }
+
+    /* step log */
+    .pf-log { margin: 0; padding-left: 22px; line-height: 1.55; min-height: 40px; }
+    .pf-log li { margin-bottom: 6px; }
+    .pf-log li.ok { color: #1f6b33; }
+    .pf-log li.bad { color: #a11d1d; font-weight: bold; }
+    .pf-hint {
+      margin-top: 10px; padding: 10px 12px; border-radius: 8px;
+      background: #fff8dc; border-left: 5px solid #c9a227; display: none;
+    }
+
+    /* challenges */
+    .pf-chal { display: grid; gap: 10px; }
+    .pf-ch {
+      border: 2px solid #e6e1d6; border-radius: 10px; padding: 10px 12px;
+      display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center;
+    }
+    .pf-ch.done { border-color: #1f8a3a; background: #f0fbf2; }
+    .pf-ch p { margin: 0 0 6px; }
+    .pf-ch .pf-input { font-size: 15px; padding: 7px 9px; }
+    .pf-ch .pf-btn { margin-top: 0; }
+    .pf-score { font-weight: bold; color: #165b33; }
+    .pf-footer { text-align: center; color: #666; font-size: 14px; padding: 10px; }
+  </style>
+</head>
+<body class="pf">
+
+<header class="pf-header">
+  <h1>🛷 Sleigh Path Finder</h1>
+  <p>Watch a link travel through your site's folders to find a file.</p>
+</header>
+
+<nav class="pf-nav">
+  <a href="index.html">← Back to Christmas Wonderland</a>
+</nav>
+
+<div class="pf-wrap">
+
+  <section class="pf-card">
+    <h2>How a link finds a file</h2>
+    <ol class="pf-rules">
+      <li>The sleigh <strong>starts in the folder of the file the link is written in</strong> (the gold box), not at the top of the site.</li>
+      <li>Each <code>/</code> is one step.</li>
+      <li><code>foldername/</code> means "go <strong>into</strong> that folder."</li>
+      <li><code>../</code> means "go <strong>up</strong> one folder."</li>
+      <li>The last part is the file name. It has to match <strong>exactly</strong>, capital letters included: <code>Tree.png</code> is not <code>tree.png</code> on GitHub Pages.</li>
+    </ol>
+  </section>
+
+  <div class="pf-grid">
+    <section class="pf-card">
+      <h2>The site's folders</h2>
+      <div class="pf-tree" id="pfTree">
+        <span class="pf-sleigh" id="pfSleigh" aria-hidden="true">🛷</span>
+      </div>
+    </section>
+
+    <section class="pf-card">
+      <h2>Send the sleigh</h2>
+      <label class="pf-label" for="pfFrom">The link is written in…</label>
+      <select class="pf-select" id="pfFrom"></select>
+
+      <label class="pf-label" for="pfHref">The path (what goes inside href="" or src="")</label>
+      <input class="pf-input" id="pfHref" value="img/tree.png" autocomplete="off" spellcheck="false">
+
+      <div class="pf-code" id="pfCode"></div>
+
+      <span class="pf-label">Try one:</span>
+      <div class="pf-presets" id="pfPresets"></div>
+
+      <button class="pf-btn" id="pfGo" type="button">Follow the link ▶</button>
+    </section>
+  </div>
+
+  <section class="pf-card">
+    <h2>What the sleigh did</h2>
+    <ol class="pf-log" id="pfLog" aria-live="polite">
+      <li>Pick a starting file, type a path, and press <strong>Follow the link</strong>.</li>
+    </ol>
+    <div class="pf-hint" id="pfHint"></div>
+  </section>
+
+  <section class="pf-card">
+    <h2>Your turn: deliver the presents <span class="pf-score" id="pfScore"></span></h2>
+    <p>Write the path that gets from the starting file to the target. Press <strong>Check</strong> to watch the sleigh try it.</p>
+    <div class="pf-chal" id="pfChal"></div>
+  </section>
+
+</div>
+
+<footer class="pf-footer">
+  Made by Carlos Murillo for BMIS 235 · Built with Claude (Path 3)
+</footer>
+
+<script>
+/* ---------- the pretend site ---------- */
+var PF_SITE = {
+  name: "christmas-site", type: "folder", children: [
+    { name: "index.html", type: "file" },
+    { name: "styles.css", type: "file" },
+    { name: "img", type: "folder", children: [
+      { name: "home.png", type: "file" },
+      { name: "tree.png", type: "file" }
+    ]},
+    { name: "pages", type: "folder", children: [
+      { name: "foods.html", type: "file" },
+      { name: "music.html", type: "file" }
+    ]}
+  ]
+};
+
+/* ---------- path logic (no page elements used here) ---------- */
+function pfFind(path) {
+  // path is an array of names from the site folder, e.g. ["img","tree.png"]
+  var node = PF_SITE;
+  for (var i = 0; i < path.length; i++) {
+    if (!node.children) return null;
+    var next = null;
+    for (var j = 0; j < node.children.length; j++) {
+      if (node.children[j].name === path[i]) next = node.children[j];
+    }
+    if (!next) return null;
+    node = next;
+  }
+  return node;
+}
+function pfKey(path) { return "/" + path.join("/"); }
+function pfChildCaseless(folderPath, name) {
+  var folder = pfFind(folderPath);
+  if (!folder || !folder.children) return null;
+  for (var j = 0; j < folder.children.length; j++) {
+    if (folder.children[j].name.toLowerCase() === name.toLowerCase()) return folder.children[j];
+  }
+  return null;
+}
+function pfAllFiles(node, path, out) {
+  node = node || PF_SITE; path = path || []; out = out || [];
+  (node.children || []).forEach(function (c) {
+    var p = path.concat(c.name);
+    if (c.type === "file") out.push(p); else pfAllFiles(c, p, out);
+  });
+  return out;
+}
+function pfRelative(fromDir, target) {
+  // shortest relative path from folder fromDir to file target
+  var i = 0;
+  while (i < fromDir.length && i < target.length - 1 && fromDir[i] === target[i]) i++;
+  var ups = [];
+  for (var k = i; k < fromDir.length; k++) ups.push("..");
+  return ups.concat(target.slice(i)).join("/");
+}
+
+/* Walks the path and returns the steps, the result, and a hint. */
+function pfWalk(fromFile, href) {
+  var dir = fromFile.slice(0, -1);
+  var steps = [];
+  var raw = href.trim();
+  var startName = fromFile.join("/");
+  steps.push({ at: dir.slice(), msg: "Start in the folder that holds <code>" + startName + "</code>: <code>" + (dir.length ? dir.join("/") + "/" : "christmas-site/ (the top)") + "</code>." });
+
+  if (raw === "") {
+    return { steps: steps, ok: false, end: dir, hint: "The path is empty. Type a file name, like <code>index.html</code>." };
+  }
+  if (/^https?:\/\//i.test(raw)) {
+    steps.push({ at: dir.slice(), msg: "This path starts with <code>http</code>, so it's a full web address. The browser goes straight to that site and doesn't walk your folders.", kind: "ok" });
+    return { steps: steps, ok: true, external: true, end: dir, hint: "Full addresses are for <strong>other</strong> websites. For your own pages and pictures, use a relative path like <code>img/tree.png</code>." };
+  }
+  if (raw.indexOf("\\") !== -1) {
+    steps.push({ at: dir.slice(), msg: "This path uses a backslash <code>\\</code>. Web paths only use forward slashes <code>/</code>.", kind: "bad" });
+    return { steps: steps, ok: false, end: dir, hint: "Try <code>" + raw.replace(/\\/g, "/") + "</code>." };
+  }
+  if (raw.charAt(0) === "/") {
+    steps.push({ at: [], msg: "The path starts with <code>/</code>, which means \"jump to the very top of the web address.\" On GitHub Pages your site lives inside a folder named after your repo, so this jumps <strong>out</strong> of your site.", kind: "bad" });
+    return { steps: steps, ok: false, end: [], hint: "Drop the first <code>/</code> and write the path starting from the gold box. Relative paths work on every host." };
+  }
+
+  var parts = raw.split("/");
+  for (var i = 0; i < parts.length; i++) {
+    var part = parts[i];
+    var last = i === parts.length - 1;
+    if (part === "" && last) {
+      // trailing slash: the browser looks for index.html in this folder
+      var idx = dir.concat("index.html");
+      if (pfFind(idx)) {
+        steps.push({ at: idx, msg: "The path ends in <code>/</code>, so the browser looks for <code>index.html</code> in this folder, and finds it.", kind: "ok" });
+        return { steps: steps, ok: true, end: idx };
+      }
+      steps.push({ at: dir.slice(), msg: "The path ends in <code>/</code>, so the browser looks for an <code>index.html</code> here. There isn't one.", kind: "bad" });
+      return { steps: steps, ok: false, end: dir, hint: "Add the file name at the end of the path." };
+    }
+    if (part === "" || part === ".") {
+      steps.push({ at: dir.slice(), msg: (part === "." ? "<code>./</code> means \"this folder\", so the sleigh stays put." : "Two slashes in a row: the sleigh stays put. It's harmless here, but it's a typo.") });
+      continue;
+    }
+    if (part === "..") {
+      if (dir.length === 0) {
+        steps.push({ at: [], msg: "<code>../</code> says go up, but the sleigh is already at the top of the site. Going up from here leaves your site.", kind: "bad" });
+        return { steps: steps, ok: false, end: [], hint: "There's one <code>../</code> too many. Remove one." };
+      }
+      dir = dir.slice(0, -1);
+      steps.push({ at: dir.slice(), msg: "<code>../</code>: go up one folder, to <code>" + (dir.length ? dir.join("/") + "/" : "christmas-site/ (the top)") + "</code>." });
+      continue;
+    }
+    var here = dir.concat(part);
+    var node = pfFind(here);
+    if (!last) {
+      if (node && node.type === "folder") {
+        dir = here;
+        steps.push({ at: dir.slice(), msg: "<code>" + part + "/</code>: go into the <code>" + part + "</code> folder." });
+        continue;
+      }
+      var near = pfChildCaseless(dir, part);
+      steps.push({ at: dir.slice(), msg: "Look for a folder named <code>" + part + "</code> here. It isn't here.", kind: "bad" });
+      return { steps: steps, ok: false, end: dir, hint: near && near.type === "folder"
+        ? "Close: the folder is <code>" + near.name + "</code>. Capital letters count."
+        : pfSuggestFolder(part, parts.slice(i + 1), fromFile) };
+    }
+    // last part = the file name
+    if (node && node.type === "file") {
+      steps.push({ at: here, msg: "Find <code>" + part + "</code> here. Found it! 🎁", kind: "ok" });
+      return { steps: steps, ok: true, end: here };
+    }
+    if (node && node.type === "folder") {
+      steps.push({ at: here, msg: "<code>" + part + "</code> is a folder, not a file.", kind: "bad" });
+      return { steps: steps, ok: false, end: here, hint: "Add a slash and the file name, like <code>" + raw + "/" + (node.children[0] ? node.children[0].name : "file.html") + "</code>." };
+    }
+    var close = pfChildCaseless(dir, part);
+    steps.push({ at: dir.slice(), msg: "Look for <code>" + part + "</code> here. It isn't here, so the browser shows a broken image or a 404 page.", kind: "bad" });
+    return { steps: steps, ok: false, end: dir, hint: close
+      ? "Close: the file is called <code>" + close.name + "</code>. Capital letters count."
+      : pfSuggest(dir, part, fromFile) };
+  }
+  return { steps: steps, ok: false, end: dir, hint: "The path doesn't end with a file name." };
+}
+function pfAllFolders(node, path, out) {
+  node = node || PF_SITE; path = path || []; out = out || [];
+  (node.children || []).forEach(function (c) {
+    if (c.type === "folder") { var p = path.concat(c.name); out.push(p); pfAllFolders(c, p, out); }
+  });
+  return out;
+}
+function pfSuggestFolder(name, rest, fromFile) {
+  var folders = pfAllFolders();
+  for (var i = 0; i < folders.length; i++) {
+    var f = folders[i];
+    if (f[f.length - 1].toLowerCase() !== name.toLowerCase()) continue;
+    var where = f.length > 1 ? "<code>" + f.slice(0, -1).join("/") + "/</code>" : "the top folder";
+    var target = f.concat(rest);
+    var msg = "There is a folder named <code>" + f[f.length - 1] + "/</code>, but it's in " + where + ", not in the gold box's folder.";
+    if (pfFind(target) && pfFind(target).type === "file") {
+      msg += " From the gold box, the path is <code>" + pfRelative(fromFile.slice(0, -1), target) + "</code>.";
+    }
+    return msg;
+  }
+  return "Nothing in this site has that folder name. Check the spelling against the folder tree.";
+}
+function pfSuggest(dir, name, fromFile) {
+  var files = pfAllFiles();
+  for (var i = 0; i < files.length; i++) {
+    if (files[i][files[i].length - 1].toLowerCase() === name.toLowerCase()) {
+      var rel = pfRelative(fromFile.slice(0, -1), files[i]);
+      return "There is a <code>" + files[i][files[i].length - 1] + "</code> in <code>" +
+        (files[i].length > 1 ? files[i].slice(0, -1).join("/") + "/" : "the top folder") +
+        "</code>. From the gold box, the path to it is <code>" + rel + "</code>.";
+    }
+  }
+  return "Nothing in this site has that name. Check the spelling against the folder tree.";
+}
+/* ---------- end path logic ---------- */
+
+(function () {
+  if (typeof document === "undefined") return;
+  var tree = document.getElementById("pfTree");
+  var sleigh = document.getElementById("pfSleigh");
+  var fromSel = document.getElementById("pfFrom");
+  var hrefIn = document.getElementById("pfHref");
+  var codeBox = document.getElementById("pfCode");
+  var log = document.getElementById("pfLog");
+  var hint = document.getElementById("pfHint");
+  var nodes = {};
+  var timers = [];
+
+  function icon(n) {
+    if (n.type === "folder") return "📁";
+    if (/\.png$/.test(n.name)) return "🖼️";
+    if (/\.css$/.test(n.name)) return "🎨";
+    return "📄";
+  }
+  function build(node, path, parent) {
+    var row = document.createElement("div");
+    row.className = "pf-node";
+    row.innerHTML = '<span class="pf-ic">' + icon(node) + '</span><span>' + node.name + (node.type === "folder" ? "/" : "") + "</span>";
+    parent.appendChild(row);
+    nodes[pfKey(path)] = row;
+    if (node.children) {
+      var kids = document.createElement("div");
+      kids.className = "pf-kids";
+      parent.appendChild(kids);
+      node.children.forEach(function (c) { build(c, path.concat(c.name), kids); });
+    }
+  }
+  build(PF_SITE, [], tree);
+
+  pfAllFiles().filter(function (p) { return /\.html$/.test(p[p.length - 1]); }).forEach(function (p) {
+    var o = document.createElement("option");
+    o.value = p.join("/");
+    o.textContent = p.join("/");
+    fromSel.appendChild(o);
+  });
+
+  function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function showCode() {
+    var h = esc(hrefIn.value);
+    var v = hrefIn.value.trim().toLowerCase();
+    var line;
+    if (/\.(png|jpe?g|gif|svg|webp)$/.test(v)) line = '&lt;img src="<span class="pf-hl">' + h + '</span>" alt="..."&gt;';
+    else if (/\.css$/.test(v)) line = '&lt;link rel="stylesheet" href="<span class="pf-hl">' + h + '</span>"&gt;';
+    else line = '&lt;a href="<span class="pf-hl">' + h + '</span>"&gt;...&lt;/a&gt;';
+    codeBox.innerHTML = "&lt;!-- inside " + esc(fromSel.value) + " --&gt;\n" + line;
+  }
+
+  function clearMarks() {
+    timers.forEach(clearTimeout); timers = [];
+    Object.keys(nodes).forEach(function (k) { nodes[k].classList.remove("is-start", "is-here", "is-found", "is-bad"); });
+  }
+  function moveSleigh(path) {
+    var row = nodes[pfKey(path)];
+    if (!row) return;
+    var t = tree.getBoundingClientRect(), r = row.getBoundingClientRect();
+    var x = r.right - t.left - 34, y = r.top - t.top + (r.height - 26) / 2;
+    sleigh.style.opacity = "1";
+    sleigh.style.transform = "translate(" + x + "px," + y + "px)";
+  }
+  function mark(path, cls) {
+    Object.keys(nodes).forEach(function (k) { nodes[k].classList.remove("is-here"); });
+    var row = nodes[pfKey(path)];
+    if (row) row.classList.add(cls);
+  }
+
+  // Runs the animation. done(result) is called at the end.
+  function run(fromPath, href, done) {
+    clearMarks();
+    var fromFile = fromPath.split("/");
+    var res = pfWalk(fromFile, href);
+    nodes[pfKey(fromFile)].classList.add("is-start");
+    log.innerHTML = "";
+    hint.style.display = "none";
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var gap = reduce ? 150 : 950;
+    res.steps.forEach(function (s, i) {
+      timers.push(setTimeout(function () {
+        moveSleigh(s.at);
+        var isLast = i === res.steps.length - 1;
+        mark(s.at, isLast ? (res.ok ? (res.external ? "is-here" : "is-found") : "is-bad") : "is-here");
+        var li = document.createElement("li");
+        if (s.kind) li.className = s.kind;
+        li.innerHTML = s.msg;
+        log.appendChild(li);
+        if (isLast) {
+          if (res.hint) { hint.innerHTML = "💡 " + res.hint; hint.style.display = "block"; }
+          if (done) done(res);
+        }
+      }, i * gap));
+    });
+  }
+
+  var presets = [
+    ["index.html", "img/tree.png"],
+    ["index.html", "pages/music.html"],
+    ["pages/foods.html", "../index.html"],
+    ["pages/foods.html", "../img/tree.png"],
+    ["pages/foods.html", "img/tree.png"],
+    ["index.html", "img/Tree.png"],
+    ["pages/foods.html", "../../index.html"],
+    ["index.html", "/img/tree.png"]
+  ];
+  var pbox = document.getElementById("pfPresets");
+  presets.forEach(function (p) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "pf-chip";
+    b.textContent = (p[0] === "index.html" ? "" : "from " + p[0] + ": ") + p[1];
+    b.addEventListener("click", function () {
+      fromSel.value = p[0]; hrefIn.value = p[1]; showCode(); run(p[0], p[1]);
+    });
+    pbox.appendChild(b);
+  });
+
+  fromSel.addEventListener("change", showCode);
+  hrefIn.addEventListener("input", showCode);
+  hrefIn.addEventListener("keydown", function (e) { if (e.key === "Enter") run(fromSel.value, hrefIn.value); });
+  document.getElementById("pfGo").addEventListener("click", function () { run(fromSel.value, hrefIn.value); });
+  showCode();
+
+  /* challenges */
+  var chals = [
+    { from: "index.html", to: "img/tree.png", what: "Show the <strong>tree picture</strong>" },
+    { from: "index.html", to: "pages/music.html", what: "Link to the <strong>music page</strong>" },
+    { from: "pages/foods.html", to: "pages/music.html", what: "Link to the <strong>music page</strong>" },
+    { from: "pages/foods.html", to: "index.html", what: "Link back to the <strong>home page</strong>" },
+    { from: "pages/foods.html", to: "styles.css", what: "Connect the <strong>stylesheet</strong>" }
+  ];
+  var solved = {};
+  var cbox = document.getElementById("pfChal");
+  var score = document.getElementById("pfScore");
+  function updateScore() { score.textContent = "(" + Object.keys(solved).length + " / " + chals.length + ")"; }
+  chals.forEach(function (c, i) {
+    var box = document.createElement("div");
+    box.className = "pf-ch";
+    box.innerHTML = '<div><p>' + (i + 1) + ". " + c.what + " from <code>" + c.from + "</code></p>" +
+      '<input class="pf-input" aria-label="Path for challenge ' + (i + 1) + '" autocomplete="off" spellcheck="false" placeholder="type the path"></div>' +
+      '<button class="pf-btn pf-alt" type="button">Check</button>';
+    cbox.appendChild(box);
+    var inp = box.querySelector("input");
+    function check() {
+      fromSel.value = c.from; hrefIn.value = inp.value; showCode();
+      tree.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      run(c.from, inp.value, function (res) {
+        var hit = res.ok && pfKey(res.end) === "/" + c.to;
+        var li = document.createElement("li");
+        if (hit) {
+          li.className = "ok"; li.innerHTML = "Delivered to the right place! 🎉";
+          solved[i] = true; box.classList.add("done");
+        } else if (res.ok) {
+          li.className = "bad"; li.innerHTML = "The link works, but it lands on the wrong file. The target is <code>" + c.to + "</code>.";
+        } else {
+          li.className = "bad"; li.innerHTML = "Not delivered yet. Read the steps above, fix the path, and try again.";
+        }
+        log.appendChild(li);
+        updateScore();
+      });
+    }
+    box.querySelector("button").addEventListener("click", check);
+    inp.addEventListener("keydown", function (e) { if (e.key === "Enter") check(); });
+  });
+  updateScore();
+
+  window.addEventListener("resize", function () {
+    var cur = tree.querySelector(".is-found, .is-bad, .is-here");
+    if (!cur) return;
+    Object.keys(nodes).forEach(function (k) { if (nodes[k] === cur) moveSleigh(k === "/" ? [] : k.slice(1).split("/")); });
+  });
+})();
+</script>
+</body>
+</html>
